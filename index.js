@@ -490,12 +490,12 @@ async function appendReviewedSwipe(context, messageId, reviewedText, reasoning =
     await context.reloadCurrentChat();
 }
 
-async function generateReviewOutputWithRetry(context, prompt, { onRetry, signal, outputMode = 'json' } = {}) {
+async function generateReviewOutputWithRetry(context, prompt, { onRetry, signal, outputMode = 'json', hasCustomPrompt = false } = {}) {
     let lastError;
 
     for (let attempt = 1; attempt <= REVIEW_RETRY_ATTEMPTS; attempt += 1) {
         try {
-            return await generateIsolatedReviewOutput(context, prompt, signal, outputMode);
+            return await generateIsolatedReviewOutput(context, prompt, signal, outputMode, hasCustomPrompt);
         } catch (error) {
             lastError = error;
 
@@ -511,8 +511,8 @@ async function generateReviewOutputWithRetry(context, prompt, { onRetry, signal,
     throw lastError ?? new Error('Review generation failed without a result.');
 }
 
-async function generateIsolatedReviewOutput(context, reviewPrompt, signal, outputMode = 'json') {
-    const reviewMessages = buildIsolatedReviewMessages(reviewPrompt, outputMode);
+async function generateIsolatedReviewOutput(context, reviewPrompt, signal, outputMode = 'json', hasCustomPrompt = false) {
+    const reviewMessages = buildIsolatedReviewMessages(reviewPrompt, outputMode, hasCustomPrompt);
     return String(await context.generateRaw({
         prompt: reviewMessages,
         api: context.mainApi,
@@ -563,6 +563,7 @@ async function handleReviewClick() {
     const characterCard = getTargetCharacterCard(context, target.message);
     const personaCard = getPersonaCard(context);
     const customTemplate = reviewSettings.customPrompt || null;
+    const hasCustomPrompt = Boolean(customTemplate);
     const reviewPrompt = buildReviewPrompt({
         sceneContext,
         lastUserMessage,
@@ -587,6 +588,7 @@ async function handleReviewClick() {
                 showToast('warning', retryMessage);
             },
             outputMode,
+            hasCustomPrompt,
         });
         let parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
         let validation = classifyReviewedOutput(reviewedOutput, outputMode);
@@ -604,6 +606,7 @@ async function handleReviewClick() {
                     showToast('warning', retryMessage);
                 },
                 outputMode,
+                hasCustomPrompt,
             });
             parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
             validation = classifyReviewedOutput(reviewedOutput, outputMode);
@@ -804,6 +807,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
     const characterCard = getTargetCharacterCard(context, message);
     const personaCard = getPersonaCard(context);
     const customTemplate = reviewSettings.customPrompt || null;
+    const hasCustomPrompt = Boolean(customTemplate);
     const reviewPrompt = buildReviewPrompt({
         sceneContext,
         lastUserMessage,
@@ -828,6 +832,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
                 showToast('warning', retryMessage);
             },
             outputMode,
+            hasCustomPrompt,
         });
         let parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
         let validation = classifyReviewedOutput(reviewedOutput, outputMode);
@@ -845,6 +850,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
                     showToast('warning', retryMessage);
                 },
                 outputMode,
+                hasCustomPrompt,
             });
             parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
             validation = classifyReviewedOutput(reviewedOutput, outputMode);

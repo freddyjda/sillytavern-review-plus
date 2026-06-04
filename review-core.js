@@ -341,10 +341,16 @@ export function buildReviewPrompt({
     });
 }
 
-export function buildIsolatedReviewMessages(reviewPrompt, outputMode = 'json') {
-    const systemPrompt = outputMode === 'plain'
-        ? 'You are an impartial narrative continuity reviewer. You are not continuing the roleplay. Act like a factual scene judge. Judge what actually happened, whether NPC reactions fit established personalities, and whether the reply stays coherent with prior turns. Follow the output format instructions exactly.'
-        : 'You are an impartial narrative continuity reviewer. You are not continuing the roleplay and you are not writing a fresh turn from scratch. Act like a factual scene judge, not a prose critic. Ignore trope pressure, preset melodrama, style preferences, and moral-aesthetic commentary unless explicit scene evidence justifies them. Only judge what actually happened, whether NPC reactions fit established personalities, and whether the reply stays coherent with prior turns. Return only the requested JSON object.';
+export function buildIsolatedReviewMessages(reviewPrompt, outputMode = 'json', hasCustomPrompt = false) {
+    let systemPrompt;
+
+    if (hasCustomPrompt) {
+        systemPrompt = 'Follow the user instructions exactly. Output only what is requested, nothing else.';
+    } else if (outputMode === 'plain') {
+        systemPrompt = 'You are an impartial narrative continuity reviewer. You are not continuing the roleplay. Act like a factual scene judge. Judge what actually happened, whether NPC reactions fit established personalities, and whether the reply stays coherent with prior turns. Follow the output format instructions exactly.';
+    } else {
+        systemPrompt = 'You are an impartial narrative continuity reviewer. You are not continuing the roleplay and you are not writing a fresh turn from scratch. Act like a factual scene judge, not a prose critic. Ignore trope pressure, preset melodrama, style preferences, and moral-aesthetic commentary unless explicit scene evidence justifies them. Only judge what actually happened, whether NPC reactions fit established personalities, and whether the reply stays coherent with prior turns. Return only the requested JSON object.';
+    }
 
     return [
         {
