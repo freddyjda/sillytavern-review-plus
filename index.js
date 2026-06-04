@@ -1,5 +1,5 @@
-import { ensureSwipes, syncMesToSwipe } from '../../../script.js';
-import { getContext } from '../../st-context.js';
+import { ensureSwipes, syncMesToSwipe } from '../../../../script.js';
+import { getContext } from '../../../st-context.js';
 import {
     buildCharacterCardContext,
     buildIsolatedReviewMessages,
