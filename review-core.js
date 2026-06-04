@@ -259,6 +259,29 @@ export function getDefaultReviewPromptTemplate() {
     ].join('\n\n');
 }
 
+export function getDefaultPlainReviewPromptTemplate() {
+    return [
+        'This is not a new turn.',
+        'Rewrite only the previous AI message.',
+        'Do not continue the story.',
+        'Prefer literal scene coherence over drama, style, or vibes when uncertain.',
+        'Do not critique the reply for taste, sexualization, prose quality, tropeiness, or moral aesthetics unless you can tie that directly to explicit scene evidence or stable character traits.',
+        'Only flag problems that are grounded in explicit scene evidence or stable character traits. If you cannot cite evidence, do not flag it.',
+        'Check basic entity-relation logic before judging tone: who lives with whom, who lives near whom, who knows whom, who is present, who just did what, and whether the reply contradicts its own relation chain.',
+        'If A lives with B and B lives near C, do not let A speak as if A lacks that same practical proximity to C unless the context explains the difference.',
+        'Treat contradictions inside the last AI message itself as evidence when the reply asserts both sides of an incompatible relation.',
+        'First, briefly explain what issues you found (if any) in 2-3 sentences.',
+        'Then provide the corrected reply on a new line starting with "Reply: " (without quotes).',
+        'The corrected reply must be ready to insert into chat directly.',
+        '{{reviewMode}}',
+        'NPC character card:\n{{characterCard}}',
+        'User persona card:\n{{personaCard}}',
+        'Scene context:\n{{sceneContext}}',
+        'Last user message:\n{{lastUserMessage}}',
+        'Last AI message to repair:\n{{lastAssistantMessage}}',
+    ].join('\n\n');
+}
+
 export function buildReviewPromptFromTemplate(template, {
     sceneContext,
     lastUserMessage,
@@ -296,8 +319,12 @@ export function buildReviewPrompt({
     personaCard,
     critique,
     customTemplate,
+    outputMode = 'json',
 } = {}) {
-    const template = customTemplate || getDefaultReviewPromptTemplate();
+    const defaultTemplate = outputMode === 'plain'
+        ? getDefaultPlainReviewPromptTemplate()
+        : getDefaultReviewPromptTemplate();
+    const template = customTemplate || defaultTemplate;
     return buildReviewPromptFromTemplate(template, {
         sceneContext,
         lastUserMessage,
@@ -444,7 +471,34 @@ function normalizeIssue(rawIssue) {
     return Object.values(issue).every(Boolean) ? issue : null;
 }
 
-export function parseReviewedOutput(text) {
+function parsePlainTextOutput(text) {
+    const value = String(text || '').trim();
+
+    if (!value) {
+        return { isValid: false, reason: 'empty', analysis: '', reply: '', raw: value };
+    }
+
+    const replyMatch = value.match(/(?:^|\n)Reply:\s*([\s\S]*)/i);
+
+    if (!replyMatch) {
+        return { isValid: false, reason: 'format', analysis: '', reply: '', raw: value };
+    }
+
+    const reply = replyMatch[1].trim();
+    const analysis = value.replace(replyMatch[0], '').trim();
+
+    if (!reply) {
+        return { isValid: false, reason: 'format', analysis, reply: '', raw: value };
+    }
+
+    return { isValid: true, reason: 'valid', analysis, reply, raw: value };
+}
+
+export function parseReviewedOutput(text, outputMode = 'json') {
+    if (outputMode === 'plain') {
+        return parsePlainTextOutput(text);
+    }
+
     const value = String(text || '').trim();
 
     if (!value) {
@@ -495,13 +549,13 @@ export function parseReviewedOutput(text) {
     return { isValid: true, reason: 'valid', analysis, reply, raw: value };
 }
 
-export function classifyReviewedOutput(text) {
-    const parsed = parseReviewedOutput(text);
+export function classifyReviewedOutput(text, outputMode = 'json') {
+    const parsed = parseReviewedOutput(text, outputMode);
     return { isValid: parsed.isValid, reason: parsed.reason };
 }
 
-export function validateReviewedOutput(text) {
-    return classifyReviewedOutput(text).isValid;
+export function validateReviewedOutput(text, outputMode = 'json') {
+    return classifyReviewedOutput(text, outputMode).isValid;
 }
 
 export function isRetryableReviewError(error) {

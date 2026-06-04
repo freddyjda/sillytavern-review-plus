@@ -33,12 +33,14 @@ const REVIEW_RETRY_ATTEMPTS = 2;
 const REVIEW_RETRY_DELAY_MS = 1200;
 const HISTORY_MODE_SELECT_ID = 'review_plus_history_mode';
 const HISTORY_LIMIT_INPUT_ID = 'review_plus_history_limit';
+const OUTPUT_MODE_SELECT_ID = 'review_plus_output_mode';
 const PROMPT_EDITOR_ID = 'review_plus_prompt_editor';
 const PROMPT_RESET_BUTTON_ID = 'review_plus_prompt_reset';
 const INLINE_REVIEW_BUTTON_CLASS = 'review_plus_inline_btn';
 const DEFAULT_SETTINGS = Object.freeze({
     historyMode: 'window',
     historyLimit: 12,
+    outputMode: 'json',
     customPrompt: '',
 });
 
@@ -68,6 +70,13 @@ function buildSettingsShell() {
                                 step="1"
                                 class="text_pole reviewPlus_settingInput"
                             />
+                        </div>
+                        <div class="reviewPlus_settingGroup">
+                            <label class="reviewPlus_settingLabel" for="${OUTPUT_MODE_SELECT_ID}">Output format</label>
+                            <select id="${OUTPUT_MODE_SELECT_ID}" class="text_pole reviewPlus_settingInput">
+                                <option value="json">JSON (structured)</option>
+                                <option value="plain">Plain text</option>
+                            </select>
                         </div>
                         <div class="reviewPlus_settingGroup">
                             <label class="reviewPlus_settingLabel" for="${PROMPT_EDITOR_ID}">
@@ -138,6 +147,10 @@ function getHistoryLimitInput() {
     return $(document.getElementById(HISTORY_LIMIT_INPUT_ID));
 }
 
+function getOutputModeSelect() {
+    return $(document.getElementById(OUTPUT_MODE_SELECT_ID));
+}
+
 function getPromptEditor() {
     return $(document.getElementById(PROMPT_EDITOR_ID));
 }
@@ -153,6 +166,7 @@ function getReviewSettings(context = getContext()) {
     return {
         historyMode: moduleSettings.historyMode === 'full' ? 'full' : DEFAULT_SETTINGS.historyMode,
         historyLimit: Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : DEFAULT_SETTINGS.historyLimit,
+        outputMode: moduleSettings.outputMode === 'plain' ? 'plain' : DEFAULT_SETTINGS.outputMode,
         customPrompt: String(moduleSettings.customPrompt ?? DEFAULT_SETTINGS.customPrompt),
     };
 }
@@ -172,6 +186,7 @@ function loadReviewSettings(context = getContext()) {
     const settings = getReviewSettings(context);
     const historyModeSelect = getHistoryModeSelect();
     const historyLimitInput = getHistoryLimitInput();
+    const outputModeSelect = getOutputModeSelect();
     const promptEditor = getPromptEditor();
 
     if (historyModeSelect.length) {
@@ -180,6 +195,10 @@ function loadReviewSettings(context = getContext()) {
 
     if (historyLimitInput.length) {
         historyLimitInput.val(String(settings.historyLimit));
+    }
+
+    if (outputModeSelect.length) {
+        outputModeSelect.val(settings.outputMode);
     }
 
     if (promptEditor.length) {
@@ -535,6 +554,7 @@ async function handleReviewClick() {
 
     const reviewMode = String(critique).trim() ? 'manual' : 'automatic';
     const reviewSettings = getReviewSettings(context);
+    const outputMode = reviewSettings.outputMode;
     const sceneContext = buildSceneContext(context.chat, target.messageIndex, {
         mode: reviewSettings.historyMode,
         maxMessages: reviewSettings.historyLimit,
@@ -551,6 +571,7 @@ async function handleReviewClick() {
         personaCard,
         critique,
         customTemplate,
+        outputMode,
     });
     const originalReply = String(target.message?.mes ?? '').trim();
     setReviewButtonBusy(true);
@@ -566,8 +587,8 @@ async function handleReviewClick() {
                 showToast('warning', retryMessage);
             },
         });
-        let parsedOutput = parseReviewedOutput(reviewedOutput);
-        let validation = classifyReviewedOutput(reviewedOutput);
+        let parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
+        let validation = classifyReviewedOutput(reviewedOutput, outputMode);
 
         if (validation.isValid && parsedOutput.reply === originalReply) {
             setStatus('The first review matched the original reply. Retrying with stricter rewrite instructions...', 'working');
@@ -582,15 +603,17 @@ async function handleReviewClick() {
                     showToast('warning', retryMessage);
                 },
             });
-            parsedOutput = parseReviewedOutput(reviewedOutput);
-            validation = classifyReviewedOutput(reviewedOutput);
+            parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
+            validation = classifyReviewedOutput(reviewedOutput, outputMode);
         }
 
         if (!validation.isValid) {
             const invalidOutputMessage = validation.reason === 'meta'
                 ? 'The reviewed replacement looked like meta output instead of a repaired reply, so the original reply was kept.'
                 : validation.reason === 'format'
-                    ? 'The reviewed replacement did not include the required evidence-based JSON review structure, so the original reply was kept.'
+                    ? outputMode === 'plain'
+                        ? 'The reviewed replacement did not include the expected format (Reply: ...), so the original reply was kept.'
+                        : 'The reviewed replacement did not include the required evidence-based JSON review structure, so the original reply was kept.'
                     : validation.reason === 'analysis'
                         ? 'The reviewed replacement did not include at least 200 characters of factual analysis, so the original reply was kept.'
                         : 'The reviewed replacement was empty, so the original reply was kept.';
@@ -639,6 +662,7 @@ function wireReviewControls() {
     const reviewButton = getReviewButton();
     const historyModeSelect = getHistoryModeSelect();
     const historyLimitInput = getHistoryLimitInput();
+    const outputModeSelect = getOutputModeSelect();
     const promptEditor = getPromptEditor();
     const promptResetButton = getPromptResetButton();
 
@@ -665,6 +689,10 @@ function wireReviewControls() {
         persistReviewSettings({
             historyLimit: Number.isInteger(nextLimit) && nextLimit > 0 ? nextLimit : DEFAULT_SETTINGS.historyLimit,
         });
+    });
+
+    outputModeSelect.off(`change.${MODULE_NAME}`).on(`change.${MODULE_NAME}`, function () {
+        persistReviewSettings({ outputMode: String($(this).val() || DEFAULT_SETTINGS.outputMode) });
     });
 
     promptEditor.off(`input.${MODULE_NAME}`).on(`input.${MODULE_NAME}`, function () {
@@ -765,6 +793,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
 
     const reviewMode = String(critique).trim() ? 'manual' : 'automatic';
     const reviewSettings = getReviewSettings(context);
+    const outputMode = reviewSettings.outputMode;
     const sceneContext = buildSceneContext(context.chat, messageIndex, {
         mode: reviewSettings.historyMode,
         maxMessages: reviewSettings.historyLimit,
@@ -781,6 +810,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
         personaCard,
         critique,
         customTemplate,
+        outputMode,
     });
     const originalReply = String(message?.mes ?? '').trim();
     setReviewButtonBusy(true);
@@ -796,8 +826,8 @@ async function handleReviewClickForMessage(messageIndex, message) {
                 showToast('warning', retryMessage);
             },
         });
-        let parsedOutput = parseReviewedOutput(reviewedOutput);
-        let validation = classifyReviewedOutput(reviewedOutput);
+        let parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
+        let validation = classifyReviewedOutput(reviewedOutput, outputMode);
 
         if (validation.isValid && parsedOutput.reply === originalReply) {
             setStatus('The first review matched the original reply. Retrying with stricter rewrite instructions...', 'working');
@@ -812,15 +842,17 @@ async function handleReviewClickForMessage(messageIndex, message) {
                     showToast('warning', retryMessage);
                 },
             });
-            parsedOutput = parseReviewedOutput(reviewedOutput);
-            validation = classifyReviewedOutput(reviewedOutput);
+            parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
+            validation = classifyReviewedOutput(reviewedOutput, outputMode);
         }
 
         if (!validation.isValid) {
             const invalidOutputMessage = validation.reason === 'meta'
                 ? 'The reviewed replacement looked like meta output instead of a repaired reply, so the original reply was kept.'
                 : validation.reason === 'format'
-                    ? 'The reviewed replacement did not include the required evidence-based JSON review structure, so the original reply was kept.'
+                    ? outputMode === 'plain'
+                        ? 'The reviewed replacement did not include the expected format (Reply: ...), so the original reply was kept.'
+                        : 'The reviewed replacement did not include the required evidence-based JSON review structure, so the original reply was kept.'
                     : validation.reason === 'analysis'
                         ? 'The reviewed replacement did not include at least 200 characters of factual analysis, so the original reply was kept.'
                         : 'The reviewed replacement was empty, so the original reply was kept.';
