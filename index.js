@@ -35,6 +35,7 @@ const HISTORY_MODE_SELECT_ID = 'review_plus_history_mode';
 const HISTORY_LIMIT_INPUT_ID = 'review_plus_history_limit';
 const PROMPT_EDITOR_ID = 'review_plus_prompt_editor';
 const PROMPT_RESET_BUTTON_ID = 'review_plus_prompt_reset';
+const INLINE_REVIEW_BUTTON_CLASS = 'review_plus_inline_btn';
 const DEFAULT_SETTINGS = Object.freeze({
     historyMode: 'window',
     historyLimit: 12,
@@ -696,6 +697,174 @@ function wireReviewControls() {
     });
 }
 
+function injectInlineReviewButton() {
+    const buttonHtml = `<div title="Review this reply" class="mes_button ${INLINE_REVIEW_BUTTON_CLASS} fa-solid fa-magnifying-glass" data-i18n="[title]Review this reply"></div>`;
+
+    const templateButton = $(`#message_template .mes_buttons .${INLINE_REVIEW_BUTTON_CLASS}`);
+    if (!templateButton.length) {
+        $(`#message_template .mes_buttons`).append(buttonHtml);
+    }
+
+    $('#chat .mes').each(function () {
+        const mesButtons = $(this).find('.mes_buttons');
+        if (!mesButtons.find(`.${INLINE_REVIEW_BUTTON_CLASS}`).length) {
+            mesButtons.append(buttonHtml);
+        }
+    });
+}
+
+function handleInlineReviewClick(mesElement) {
+    const mesId = mesElement.attr('mesid');
+    const isUser = mesElement.attr('is_user') === 'true';
+
+    if (isUser) {
+        showToast('warning', 'Review can only process AI messages.');
+        return;
+    }
+
+    const context = getContext();
+    const chat = Array.isArray(context?.chat) ? context.chat : [];
+    const messageIndex = parseInt(mesId, 10);
+
+    if (isNaN(messageIndex) || messageIndex < 0 || messageIndex >= chat.length) {
+        showToast('error', 'Invalid message.');
+        return;
+    }
+
+    const message = chat[messageIndex];
+    if (!message || message.is_user || message.is_system) {
+        showToast('warning', 'This message cannot be reviewed.');
+        return;
+    }
+
+    handleReviewClickForMessage(messageIndex, message);
+}
+
+async function handleReviewClickForMessage(messageIndex, message) {
+    if (isGenerationInProgress()) {
+        setStatus('Another generation is already in progress. Wait for it to finish before reviewing.', 'warning');
+        showToast('warning', 'Another generation is already in progress.');
+        return;
+    }
+
+    setStatus('Waiting for review notes. Leave the popup blank to auto-detect scene problems.', 'working');
+    const critique = await openReviewPopup();
+
+    if (critique === null) {
+        setStatus('Review cancelled. No changes were made.', 'idle');
+        return;
+    }
+
+    const context = getContext();
+
+    if (typeof context.generateRaw !== 'function') {
+        setStatus('Review generation is unavailable in the current context.', 'error');
+        showToast('error', 'Review generation is unavailable in the current context.');
+        return;
+    }
+
+    const reviewMode = String(critique).trim() ? 'manual' : 'automatic';
+    const reviewSettings = getReviewSettings(context);
+    const sceneContext = buildSceneContext(context.chat, messageIndex, {
+        mode: reviewSettings.historyMode,
+        maxMessages: reviewSettings.historyLimit,
+    });
+    const lastUserMessage = findPreviousUserMessage(context.chat, messageIndex);
+    const characterCard = getTargetCharacterCard(context, message);
+    const personaCard = getPersonaCard(context);
+    const customTemplate = reviewSettings.customPrompt || null;
+    const reviewPrompt = buildReviewPrompt({
+        sceneContext,
+        lastUserMessage,
+        lastAssistantMessage: message?.mes,
+        characterCard,
+        personaCard,
+        critique,
+        customTemplate,
+    });
+    const originalReply = String(message?.mes ?? '').trim();
+    setReviewButtonBusy(true);
+    setStatus(`Generating a ${reviewMode} reviewed replacement for AI message #${messageIndex} with isolated judge mode...`, 'working');
+
+    try {
+        context.deactivateSendButtons?.();
+
+        let reviewedOutput = await generateReviewOutputWithRetry(context, reviewPrompt, {
+            onRetry: (attempt, error) => {
+                const retryMessage = `Review attempt ${attempt} failed with a transient backend error (${error.message}). Retrying...`;
+                setStatus(retryMessage, 'working');
+                showToast('warning', retryMessage);
+            },
+        });
+        let parsedOutput = parseReviewedOutput(reviewedOutput);
+        let validation = classifyReviewedOutput(reviewedOutput);
+
+        if (validation.isValid && parsedOutput.reply === originalReply) {
+            setStatus('The first review matched the original reply. Retrying with stricter rewrite instructions...', 'working');
+
+            reviewedOutput = await generateReviewOutputWithRetry(context, buildRetryReviewPrompt({
+                    originalPrompt: reviewPrompt,
+                    critique,
+                }), {
+                onRetry: (attempt, error) => {
+                    const retryMessage = `Stricter review attempt ${attempt} failed with a transient backend error (${error.message}). Retrying...`;
+                    setStatus(retryMessage, 'working');
+                    showToast('warning', retryMessage);
+                },
+            });
+            parsedOutput = parseReviewedOutput(reviewedOutput);
+            validation = classifyReviewedOutput(reviewedOutput);
+        }
+
+        if (!validation.isValid) {
+            const invalidOutputMessage = validation.reason === 'meta'
+                ? 'The reviewed replacement looked like meta output instead of a repaired reply, so the original reply was kept.'
+                : validation.reason === 'format'
+                    ? 'The reviewed replacement did not include the required evidence-based JSON review structure, so the original reply was kept.'
+                    : validation.reason === 'analysis'
+                        ? 'The reviewed replacement did not include at least 200 characters of factual analysis, so the original reply was kept.'
+                        : 'The reviewed replacement was empty, so the original reply was kept.';
+            setStatus(invalidOutputMessage, 'warning');
+            showToast('warning', invalidOutputMessage);
+            return;
+        }
+
+        if (parsedOutput.reply === originalReply) {
+            const shouldForceSwipe = await openUnchangedResultPopup({
+                originalReply,
+                reviewedText: reviewedOutput,
+            });
+
+            if (!shouldForceSwipe) {
+                const unchangedMessage = String(critique).trim()
+                    ? 'The model returned the original reply unchanged even after a stricter retry, so the original reply was kept.'
+                    : 'The auto-review returned the original reply unchanged even after a stricter retry, so the original reply was kept.';
+                setStatus(unchangedMessage, 'warning');
+                showToast('warning', unchangedMessage);
+                return;
+            }
+        }
+
+        await appendReviewedSwipe(context, messageIndex, parsedOutput.reply, parsedOutput.analysis);
+
+        setStatus(`Generated and activated a ${reviewMode} reviewed swipe for AI message #${messageIndex}.`, 'ready');
+        showToast('success', 'Reviewed replacement added as a new active swipe.');
+    } catch (error) {
+        console.error(`${MODULE_NAME}: failed to generate reviewed swipe`, error);
+        const wasAborted = error?.name === 'AbortError';
+        const failureMessage = wasAborted
+            ? 'Review generation was stopped. The original reply was left unchanged.'
+            : isRetryableReviewError(error)
+            ? `The review request reached the backend, but it kept failing with a transient upstream error (${error.message}). The original reply was left unchanged.`
+            : 'Review generation failed. The original reply was left unchanged.';
+        setStatus(failureMessage, wasAborted ? 'warning' : 'error');
+        showToast(wasAborted ? 'warning' : 'error', failureMessage);
+    } finally {
+        context.activateSendButtons?.();
+        setReviewButtonBusy(false);
+    }
+}
+
 function ensureReviewPlusShell() {
     const host = getSettingsHost();
 
@@ -709,6 +878,14 @@ function ensureReviewPlusShell() {
 
     loadReviewSettings();
     wireReviewControls();
+    injectInlineReviewButton();
+
+    $(document).off(`click.${MODULE_NAME}`, `.${INLINE_REVIEW_BUTTON_CLASS}`);
+    $(document).on(`click.${MODULE_NAME}`, `.${INLINE_REVIEW_BUTTON_CLASS}`, function (e) {
+        e.stopPropagation();
+        const mesElement = $(this).closest('.mes');
+        handleInlineReviewClick(mesElement);
+    });
 }
 
 jQuery(function () {
