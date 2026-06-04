@@ -503,16 +503,7 @@ function parsePlainTextOutput(text) {
         }
     }
 
-    const lines = value.split('\n').filter(line => line.trim());
-    if (lines.length >= 2) {
-        const lastLine = lines[lines.length - 1].trim();
-        if (lastLine.length > 50 && !lastLine.startsWith('Reply:')) {
-            const analysis = lines.slice(0, -1).join('\n').trim();
-            return { isValid: true, reason: 'valid', analysis, reply: lastLine, raw: value };
-        }
-    }
-
-    return { isValid: false, reason: 'format', analysis: '', reply: '', raw: value };
+    return { isValid: true, reason: 'valid', analysis: '', reply: value, raw: value };
 }
 
 export function parseReviewedOutput(text, outputMode = 'json') {
