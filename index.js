@@ -128,7 +128,15 @@ function buildSettingsShell() {
 }
 
 function getSettingsHost() {
-    return $(document.getElementById(SETTINGS_CONTAINER_ID));
+    let host = $(document.getElementById(SETTINGS_CONTAINER_ID));
+    if (!host.length) {
+        const extensionsSettings = $('#extensions_settings2');
+        if (extensionsSettings.length) {
+            host = $(`<div id="${SETTINGS_CONTAINER_ID}" class="extension_container"></div>`);
+            extensionsSettings.prepend(host);
+        }
+    }
+    return host;
 }
 
 function getStatusElement() {

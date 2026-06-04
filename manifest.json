@@ -6,7 +6,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Freddy diaz",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "license": "MIT",
     "description": "Evidence-based review and rewrite tool for the last SillyTavern AI reply.",
     "homePage": "https://github.com/freddyjda/sillytavern-review-plus",
