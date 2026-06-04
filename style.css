@@ -1,0 +1,147 @@
+.reviewPlus_settingsShell {
+    margin-block: 0.75rem;
+}
+
+.reviewPlus_panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.reviewPlus_settingGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.reviewPlus_settingLabel {
+    font-size: 0.95rem;
+    opacity: 0.9;
+}
+
+.reviewPlus_settingInput {
+    width: min(18rem, 100%);
+}
+
+.reviewPlus_status {
+    opacity: 0.85;
+}
+
+.reviewPlus_actions {
+    min-height: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.reviewPlus_reviewButton {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.reviewPlus_reviewButton:disabled,
+.reviewPlus_reviewButton.reviewPlus_reviewButton--busy {
+    cursor: progress;
+    opacity: 0.7;
+}
+
+.reviewPlus_reviewButton.reviewPlus_reviewButton--busy::after {
+    content: '';
+    width: 0.8rem;
+    height: 0.8rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: reviewPlus_spin 0.8s linear infinite;
+}
+
+.reviewPlus_status[data-state="warning"],
+.reviewPlus_status[data-state="error"] {
+    opacity: 1;
+}
+
+.reviewPlus_status[data-state="working"],
+.reviewPlus_status[data-state="ready"] {
+    opacity: 1;
+}
+
+.reviewPlus_popup {
+    width: min(42rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.15));
+    border-radius: 0.75rem;
+    background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.96));
+    color: var(--SmartThemeBodyColor, inherit);
+    padding: 0;
+}
+
+.reviewPlus_popup::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.reviewPlus_popup.reviewPlus_popup--wide {
+    width: min(72rem, calc(100vw - 2rem));
+}
+
+.reviewPlus_popupForm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+}
+
+.reviewPlus_popupHeader {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.reviewPlus_popupBody {
+    opacity: 0.9;
+    line-height: 1.4;
+}
+
+.reviewPlus_popupInput {
+    width: 100%;
+    min-height: 10rem;
+    resize: vertical;
+}
+
+.reviewPlus_popupActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.reviewPlus_popupCompareMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    opacity: 0.8;
+    font-size: 0.95em;
+}
+
+.reviewPlus_popupCompare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.reviewPlus_popupCompareColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+@media (max-width: 900px) {
+    .reviewPlus_popupCompare {
+        grid-template-columns: 1fr;
+    }
+}
+
+@keyframes reviewPlus_spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

@@ -1,0 +1,15 @@
+﻿{
+    "display_name":  "Review Plus",
+    "loading_order":  20,
+    "requires":  [
+
+                 ],
+    "optional":  [
+
+                 ],
+    "js":  "index.js",
+    "css":  "style.css",
+    "author":  "Freddy diaz",
+    "version":  "0.1.1",
+    "homePage":  "https://github.com/freddyjda/sillytavern-review-plus"
+}
