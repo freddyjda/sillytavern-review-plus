@@ -270,9 +270,15 @@ export function getDefaultPlainReviewPromptTemplate() {
         'Check basic entity-relation logic before judging tone: who lives with whom, who lives near whom, who knows whom, who is present, who just did what, and whether the reply contradicts its own relation chain.',
         'If A lives with B and B lives near C, do not let A speak as if A lacks that same practical proximity to C unless the context explains the difference.',
         'Treat contradictions inside the last AI message itself as evidence when the reply asserts both sides of an incompatible relation.',
-        'First, briefly explain what issues you found (if any) in 2-3 sentences.',
-        'Then provide the corrected reply on a new line starting with "Reply: " (without quotes).',
-        'The corrected reply must be ready to insert into chat directly.',
+        'OUTPUT FORMAT (strict):',
+        '1. First, write your analysis in 2-4 sentences explaining what issues you found.',
+        '2. Then on a NEW line, write exactly: Reply: [your corrected message here]',
+        'The line MUST start with "Reply: " followed immediately by the corrected text.',
+        'Do NOT add anything after the Reply line.',
+        'Do NOT use quotes or code blocks around the reply.',
+        'Example:',
+        'The original reply had the character calling the user by the wrong name and ignoring that they were sitting down.',
+        'Reply: [corrected message text here]',
         '{{reviewMode}}',
         'NPC character card:\n{{characterCard}}',
         'User persona card:\n{{personaCard}}',
@@ -478,20 +484,35 @@ function parsePlainTextOutput(text) {
         return { isValid: false, reason: 'empty', analysis: '', reply: '', raw: value };
     }
 
-    const replyMatch = value.match(/(?:^|\n)Reply:\s*([\s\S]*)/i);
+    const patterns = [
+        /(?:^|\n)Reply:\s*([\s\S]*)/i,
+        /(?:^|\n)\[Reply\]\s*([\s\S]*)/i,
+        /(?:^|\n)\*\*Reply:\*\*\s*([\s\S]*)/i,
+        /(?:^|\n)> Reply:\s*([\s\S]*)/i,
+    ];
 
-    if (!replyMatch) {
-        return { isValid: false, reason: 'format', analysis: '', reply: '', raw: value };
+    for (const pattern of patterns) {
+        const match = value.match(pattern);
+        if (match) {
+            const reply = match[1].trim();
+            const analysis = value.replace(match[0], '').trim();
+
+            if (reply) {
+                return { isValid: true, reason: 'valid', analysis, reply, raw: value };
+            }
+        }
     }
 
-    const reply = replyMatch[1].trim();
-    const analysis = value.replace(replyMatch[0], '').trim();
-
-    if (!reply) {
-        return { isValid: false, reason: 'format', analysis, reply: '', raw: value };
+    const lines = value.split('\n').filter(line => line.trim());
+    if (lines.length >= 2) {
+        const lastLine = lines[lines.length - 1].trim();
+        if (lastLine.length > 50 && !lastLine.startsWith('Reply:')) {
+            const analysis = lines.slice(0, -1).join('\n').trim();
+            return { isValid: true, reason: 'valid', analysis, reply: lastLine, raw: value };
+        }
     }
 
-    return { isValid: true, reason: 'valid', analysis, reply, raw: value };
+    return { isValid: false, reason: 'format', analysis: '', reply: '', raw: value };
 }
 
 export function parseReviewedOutput(text, outputMode = 'json') {
