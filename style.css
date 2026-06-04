@@ -23,6 +23,51 @@
     width: min(18rem, 100%);
 }
 
+.reviewPlus_promptEditor {
+    width: 100%;
+    min-height: 12rem;
+    resize: vertical;
+    font-family: monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    tab-size: 4;
+}
+
+.reviewPlus_hint {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    font-weight: normal;
+    margin-left: 0.5rem;
+}
+
+.reviewPlus_promptVariables {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+.reviewPlus_variableTag {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    background: var(--SmartThemeQuoteColor, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.15));
+    border-radius: 0.25rem;
+    font-family: monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.reviewPlus_variableTag:hover {
+    background: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.12));
+}
+
+.reviewPlus_resetButton {
+    align-self: flex-start;
+    margin-top: 0.35rem;
+}
+
 .reviewPlus_status {
     opacity: 0.85;
 }

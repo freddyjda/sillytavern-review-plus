@@ -12,6 +12,7 @@ import {
     classifyReviewedOutput,
     findLatestReviewableMessageIndex,
     findPreviousUserMessage,
+    getDefaultReviewPromptTemplate,
     hasValidSwipeState,
     isRetryableReviewError,
     parseReviewedOutput,
@@ -32,9 +33,12 @@ const REVIEW_RETRY_ATTEMPTS = 2;
 const REVIEW_RETRY_DELAY_MS = 1200;
 const HISTORY_MODE_SELECT_ID = 'review_plus_history_mode';
 const HISTORY_LIMIT_INPUT_ID = 'review_plus_history_limit';
+const PROMPT_EDITOR_ID = 'review_plus_prompt_editor';
+const PROMPT_RESET_BUTTON_ID = 'review_plus_prompt_reset';
 const DEFAULT_SETTINGS = Object.freeze({
     historyMode: 'window',
     historyLimit: 12,
+    customPrompt: '',
 });
 
 function buildSettingsShell() {
@@ -63,6 +67,34 @@ function buildSettingsShell() {
                                 step="1"
                                 class="text_pole reviewPlus_settingInput"
                             />
+                        </div>
+                        <div class="reviewPlus_settingGroup">
+                            <label class="reviewPlus_settingLabel" for="${PROMPT_EDITOR_ID}">
+                                Review prompt template
+                                <span class="reviewPlus_hint">Use {{variable}} placeholders</span>
+                            </label>
+                            <textarea
+                                id="${PROMPT_EDITOR_ID}"
+                                class="text_pole reviewPlus_promptEditor"
+                                rows="12"
+                                spellcheck="false"
+                                placeholder="Enter custom review prompt template..."
+                            ></textarea>
+                            <div class="reviewPlus_promptVariables">
+                                <span class="reviewPlus_variableTag" data-variable="{{reviewMode}}">{{reviewMode}}</span>
+                                <span class="reviewPlus_variableTag" data-variable="{{characterCard}}">{{characterCard}}</span>
+                                <span class="reviewPlus_variableTag" data-variable="{{personaCard}}">{{personaCard}}</span>
+                                <span class="reviewPlus_variableTag" data-variable="{{sceneContext}}">{{sceneContext}}</span>
+                                <span class="reviewPlus_variableTag" data-variable="{{lastUserMessage}}">{{lastUserMessage}}</span>
+                                <span class="reviewPlus_variableTag" data-variable="{{lastAssistantMessage}}">{{lastAssistantMessage}}</span>
+                            </div>
+                            <button
+                                id="${PROMPT_RESET_BUTTON_ID}"
+                                type="button"
+                                class="menu_button interactable reviewPlus_resetButton"
+                            >
+                                Reset to default
+                            </button>
                         </div>
                         <div id="${STATUS_ID}" class="reviewPlus_status" data-state="idle" aria-live="polite">
                             Review the latest AI reply before generating a replacement.
@@ -105,6 +137,14 @@ function getHistoryLimitInput() {
     return $(document.getElementById(HISTORY_LIMIT_INPUT_ID));
 }
 
+function getPromptEditor() {
+    return $(document.getElementById(PROMPT_EDITOR_ID));
+}
+
+function getPromptResetButton() {
+    return $(document.getElementById(PROMPT_RESET_BUTTON_ID));
+}
+
 function getReviewSettings(context = getContext()) {
     const moduleSettings = context.extensionSettings?.[MODULE_NAME] ?? {};
     const rawLimit = Number(moduleSettings.historyLimit);
@@ -112,6 +152,7 @@ function getReviewSettings(context = getContext()) {
     return {
         historyMode: moduleSettings.historyMode === 'full' ? 'full' : DEFAULT_SETTINGS.historyMode,
         historyLimit: Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : DEFAULT_SETTINGS.historyLimit,
+        customPrompt: String(moduleSettings.customPrompt ?? DEFAULT_SETTINGS.customPrompt),
     };
 }
 
@@ -130,6 +171,7 @@ function loadReviewSettings(context = getContext()) {
     const settings = getReviewSettings(context);
     const historyModeSelect = getHistoryModeSelect();
     const historyLimitInput = getHistoryLimitInput();
+    const promptEditor = getPromptEditor();
 
     if (historyModeSelect.length) {
         historyModeSelect.val(settings.historyMode);
@@ -137,6 +179,11 @@ function loadReviewSettings(context = getContext()) {
 
     if (historyLimitInput.length) {
         historyLimitInput.val(String(settings.historyLimit));
+    }
+
+    if (promptEditor.length) {
+        const promptValue = settings.customPrompt || getDefaultReviewPromptTemplate();
+        promptEditor.val(promptValue);
     }
 
     updateHistoryLimitState(settings);
@@ -494,6 +541,7 @@ async function handleReviewClick() {
     const lastUserMessage = findPreviousUserMessage(context.chat, target.messageIndex);
     const characterCard = getTargetCharacterCard(context, target.message);
     const personaCard = getPersonaCard(context);
+    const customTemplate = reviewSettings.customPrompt || null;
     const reviewPrompt = buildReviewPrompt({
         sceneContext,
         lastUserMessage,
@@ -501,6 +549,7 @@ async function handleReviewClick() {
         characterCard,
         personaCard,
         critique,
+        customTemplate,
     });
     const originalReply = String(target.message?.mes ?? '').trim();
     setReviewButtonBusy(true);
@@ -589,6 +638,8 @@ function wireReviewControls() {
     const reviewButton = getReviewButton();
     const historyModeSelect = getHistoryModeSelect();
     const historyLimitInput = getHistoryLimitInput();
+    const promptEditor = getPromptEditor();
+    const promptResetButton = getPromptResetButton();
 
     if (!reviewButton.length) {
         return;
@@ -613,6 +664,35 @@ function wireReviewControls() {
         persistReviewSettings({
             historyLimit: Number.isInteger(nextLimit) && nextLimit > 0 ? nextLimit : DEFAULT_SETTINGS.historyLimit,
         });
+    });
+
+    promptEditor.off(`input.${MODULE_NAME}`).on(`input.${MODULE_NAME}`, function () {
+        persistReviewSettings({ customPrompt: String($(this).val() || '') });
+    });
+
+    promptResetButton.off(`click.${MODULE_NAME}`).on(`click.${MODULE_NAME}`, function () {
+        const defaultTemplate = getDefaultReviewPromptTemplate();
+        promptEditor.val(defaultTemplate);
+        persistReviewSettings({ customPrompt: '' });
+        showToast('info', 'Review prompt reset to default.');
+    });
+
+    $(document).off(`click.${MODULE_NAME}`, '.reviewPlus_variableTag');
+    $(document).on(`click.${MODULE_NAME}`, '.reviewPlus_variableTag', function () {
+        const variable = $(this).data('variable');
+        if (!variable || !promptEditor.length) return;
+
+        const textarea = promptEditor[0];
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentValue = promptEditor.val();
+        const newValue = currentValue.substring(0, start) + variable + currentValue.substring(end);
+        promptEditor.val(newValue);
+        persistReviewSettings({ customPrompt: newValue });
+
+        const newCursorPos = start + variable.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
     });
 }
 

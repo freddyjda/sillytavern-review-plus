@@ -229,19 +229,7 @@ export function findPreviousUserMessage(messages, targetIndex) {
     return '';
 }
 
-export function buildReviewPrompt({
-    sceneContext,
-    lastUserMessage,
-    lastAssistantMessage,
-    characterCard,
-    personaCard,
-    critique,
-} = {}) {
-    const manualCritique = String(critique ?? '').trim();
-    const reviewMode = manualCritique
-        ? `User critique (authoritative factual guidance):\n${manualCritique}`
-        : 'Auto-review mode: detect only evidence-backed contradictions, ignored user input, forgotten context, unjustified escalation, out-of-character behavior, and relational logic errors.';
-
+export function getDefaultReviewPromptTemplate() {
     return [
         'This is not a new turn.',
         'Rewrite only the previous AI message.',
@@ -262,13 +250,62 @@ export function buildReviewPrompt({
         'Step 2 (response_check): ask whether NPCs are responding appropriately to prior turns, ignoring user dialogue/actions, or forgetting important context.',
         'Step 3 (logic_check): first check internal relation/spatial logic, then ask whether NPCs are acting within their personalities; if not, state whether there is a valid contextual reason or an unsupported hallucination.',
         'Step 4 (rewrite_plan): explain how the final cleaned reply will tie loose ends and remove or rewrite unsupported dialogue/actions.',
-        reviewMode,
-        `NPC character card:\n${String(characterCard ?? '')}`,
-        `User persona card:\n${String(personaCard ?? '')}`,
-        `Scene context:\n${String(sceneContext ?? '')}`,
-        `Last user message:\n${String(lastUserMessage ?? '')}`,
-        `Last AI message to repair:\n${String(lastAssistantMessage ?? '')}`,
+        '{{reviewMode}}',
+        'NPC character card:\n{{characterCard}}',
+        'User persona card:\n{{personaCard}}',
+        'Scene context:\n{{sceneContext}}',
+        'Last user message:\n{{lastUserMessage}}',
+        'Last AI message to repair:\n{{lastAssistantMessage}}',
     ].join('\n\n');
+}
+
+export function buildReviewPromptFromTemplate(template, {
+    sceneContext,
+    lastUserMessage,
+    lastAssistantMessage,
+    characterCard,
+    personaCard,
+    critique,
+} = {}) {
+    const manualCritique = String(critique ?? '').trim();
+    const reviewMode = manualCritique
+        ? `User critique (authoritative factual guidance):\n${manualCritique}`
+        : 'Auto-review mode: detect only evidence-backed contradictions, ignored user input, forgotten context, unjustified escalation, out-of-character behavior, and relational logic errors.';
+
+    const variables = {
+        reviewMode,
+        characterCard: String(characterCard ?? ''),
+        personaCard: String(personaCard ?? ''),
+        sceneContext: String(sceneContext ?? ''),
+        lastUserMessage: String(lastUserMessage ?? ''),
+        lastAssistantMessage: String(lastAssistantMessage ?? ''),
+    };
+
+    let result = String(template ?? '');
+    for (const [key, value] of Object.entries(variables)) {
+        result = result.replaceAll(`{{${key}}}`, value);
+    }
+    return result;
+}
+
+export function buildReviewPrompt({
+    sceneContext,
+    lastUserMessage,
+    lastAssistantMessage,
+    characterCard,
+    personaCard,
+    critique,
+    customTemplate,
+} = {}) {
+    const template = customTemplate || getDefaultReviewPromptTemplate();
+    return buildReviewPromptFromTemplate(template, {
+        sceneContext,
+        lastUserMessage,
+        lastAssistantMessage,
+        characterCard,
+        personaCard,
+        critique,
+    });
 }
 
 export function buildIsolatedReviewMessages(reviewPrompt) {
