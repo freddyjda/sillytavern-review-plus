@@ -1,15 +1,14 @@
-﻿{
-    "display_name":  "Review Plus",
-    "loading_order":  20,
-    "requires":  [
-
-                 ],
-    "optional":  [
-
-                 ],
-    "js":  "index.js",
-    "css":  "style.css",
-    "author":  "Freddy diaz",
-    "version":  "0.1.1",
-    "homePage":  "https://github.com/freddyjda/sillytavern-review-plus"
+{
+    "display_name": "Review Plus",
+    "loading_order": 20,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Freddy diaz",
+    "version": "0.1.1",
+    "license": "MIT",
+    "description": "Evidence-based review and rewrite tool for the last SillyTavern AI reply.",
+    "homePage": "https://github.com/freddyjda/sillytavern-review-plus",
+    "auto_update": true
 }

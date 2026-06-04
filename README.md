@@ -1,6 +1,6 @@
 ﻿# SillyTavern Review Plus
 
-Review Plus is a SillyTavern extension that adds a **Review last reply** workflow for roleplay continuity fixes.
+Review Plus is a third-party SillyTavern extension that adds a **Review last reply** workflow for roleplay continuity fixes.
 
 Instead of doing a normal regenerate, Review Plus asks an isolated factual reviewer to inspect the last AI reply, identify evidence-backed continuity problems, and create a corrected replacement as a new active swipe.
 
@@ -25,15 +25,26 @@ Instead of doing a normal regenerate, Review Plus asks an isolated factual revie
 
 ## Installation
 
-1. Download or clone this repository.
-2. Copy the folder into your SillyTavern extensions directory:
+Install it from inside SillyTavern as a third-party extension:
+
+1. Open SillyTavern.
+2. Go to **Extensions**.
+3. Click **Install extension** / **Import extension**.
+4. Paste this Git URL:
 
 ```text
-SillyTavern/public/scripts/extensions/review-plus
+https://github.com/freddyjda/sillytavern-review-plus
 ```
 
-3. Restart SillyTavern or hard-refresh your browser.
-4. Open the extensions panel and look for **Review Plus**.
+5. Confirm the install.
+6. Restart SillyTavern or hard-refresh the browser.
+7. Enable **Review Plus** if it is not already enabled.
+
+SillyTavern will clone this repository into its third-party extensions folder automatically. You do **not** need to copy files into the SillyTavern repo by hand.
+
+## Updating
+
+Use SillyTavern's extension update button/menu. The manifest includes `auto_update: true`.
 
 ## Usage
 
@@ -51,14 +62,14 @@ The reviewer is intentionally instructed to prioritize concrete scene evidence o
 
 ## Development
 
-This extension was developed against a local SillyTavern install. Core files:
+Core files:
 
 - `manifest.json`
 - `index.js`
 - `review-core.js`
 - `style.css`
 
-Focused tests live in the original SillyTavern workspace under:
+Focused tests live in the original SillyTavern development workspace under:
 
 ```text
 tests/frontend/review-plus-core.test.js
