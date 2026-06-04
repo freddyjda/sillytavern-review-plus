@@ -490,12 +490,12 @@ async function appendReviewedSwipe(context, messageId, reviewedText, reasoning =
     await context.reloadCurrentChat();
 }
 
-async function generateReviewOutputWithRetry(context, prompt, { onRetry, signal } = {}) {
+async function generateReviewOutputWithRetry(context, prompt, { onRetry, signal, outputMode = 'json' } = {}) {
     let lastError;
 
     for (let attempt = 1; attempt <= REVIEW_RETRY_ATTEMPTS; attempt += 1) {
         try {
-            return await generateIsolatedReviewOutput(context, prompt, signal);
+            return await generateIsolatedReviewOutput(context, prompt, signal, outputMode);
         } catch (error) {
             lastError = error;
 
@@ -511,8 +511,8 @@ async function generateReviewOutputWithRetry(context, prompt, { onRetry, signal 
     throw lastError ?? new Error('Review generation failed without a result.');
 }
 
-async function generateIsolatedReviewOutput(context, reviewPrompt, signal) {
-    const reviewMessages = buildIsolatedReviewMessages(reviewPrompt);
+async function generateIsolatedReviewOutput(context, reviewPrompt, signal, outputMode = 'json') {
+    const reviewMessages = buildIsolatedReviewMessages(reviewPrompt, outputMode);
     return String(await context.generateRaw({
         prompt: reviewMessages,
         api: context.mainApi,
@@ -586,6 +586,7 @@ async function handleReviewClick() {
                 setStatus(retryMessage, 'working');
                 showToast('warning', retryMessage);
             },
+            outputMode,
         });
         let parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
         let validation = classifyReviewedOutput(reviewedOutput, outputMode);
@@ -602,6 +603,7 @@ async function handleReviewClick() {
                     setStatus(retryMessage, 'working');
                     showToast('warning', retryMessage);
                 },
+                outputMode,
             });
             parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
             validation = classifyReviewedOutput(reviewedOutput, outputMode);
@@ -825,6 +827,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
                 setStatus(retryMessage, 'working');
                 showToast('warning', retryMessage);
             },
+            outputMode,
         });
         let parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
         let validation = classifyReviewedOutput(reviewedOutput, outputMode);
@@ -841,6 +844,7 @@ async function handleReviewClickForMessage(messageIndex, message) {
                     setStatus(retryMessage, 'working');
                     showToast('warning', retryMessage);
                 },
+                outputMode,
             });
             parsedOutput = parseReviewedOutput(reviewedOutput, outputMode);
             validation = classifyReviewedOutput(reviewedOutput, outputMode);
